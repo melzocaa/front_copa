@@ -213,101 +213,141 @@
     </div>
 
     <script>
-    document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function () {
 
-    // ================= API (VERCEL) =================
-    const API_URL = '/api';
+    // ================= API =================
+    const API_URL = 'bolao-backend-nkauvo-nkauvos-projects.vercel.app';
 
     let currentUser = null;
     let currentMatchId = null;
 
-    // ================= FETCH HELPER =================
+    // ================= FETCH =================
     async function api(endpoint, method = 'GET', body = null) {
+        try {
+            const res = await fetch(API_URL + endpoint, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: body ? JSON.stringify(body) : null
+            });
 
-        const res = await fetch(API_URL + endpoint, {
-            method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: body ? JSON.stringify(body) : null
-        });
-
-        return res.json();
+            return await res.json();
+        } catch (err) {
+            console.error('Erro API:', err);
+            return { error: 'Erro de conexão com servidor' };
+        }
     }
 
     // ================= UI =================
     function showScreen(screen) {
-        document.getElementById('login-screen').classList.add('hidden');
-        document.getElementById('register-screen').classList.add('hidden');
-        document.getElementById('dashboard-screen').classList.add('hidden');
+        const login = document.getElementById('login-screen');
+        const register = document.getElementById('register-screen');
+        const dashboard = document.getElementById('dashboard-screen');
 
-        document.getElementById(screen + '-screen').classList.remove('hidden');
+        if (!login || !register || !dashboard) return;
+
+        login.classList.add('hidden');
+        register.classList.add('hidden');
+        dashboard.classList.add('hidden');
+
+        const target = document.getElementById(screen + '-screen');
+        if (target) target.classList.remove('hidden');
     }
 
     function showToast(msg) {
-        alert(msg);
+        const toast = document.getElementById('toast');
+        const text = document.getElementById('toast-message');
+
+        if (!toast || !text) {
+            alert(msg);
+            return;
+        }
+
+        text.innerText = msg;
+        toast.classList.remove('translate-x-full');
+
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+        }, 2500);
+    }
+
+    // ================= BOTÕES LOGIN / CADASTRO =================
+    const registerBtn = document.getElementById('show-register-btn');
+    const loginBtn = document.getElementById('show-login-btn');
+
+    if (registerBtn) {
+        registerBtn.addEventListener('click', () => {
+            showScreen('register');
+        });
+    }
+
+    if (loginBtn) {
+        loginBtn.addEventListener('click', () => {
+            showScreen('login');
+        });
     }
 
     // ================= LOGIN =================
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    const loginForm = document.getElementById('login-form');
 
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        const data = await api('/auth/login', 'POST', {
-            email,
-            password
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            const data = await api('/auth/login', 'POST', { email, password });
+
+            if (data.error) return showToast(data.error);
+
+            currentUser = data.user;
+
+            showToast('Login OK');
+            showScreen('dashboard');
+
+            loadDashboard();
         });
-
-        if (data.error) {
-            showToast(data.error);
-            return;
-        }
-
-        currentUser = data.user;
-
-        showToast('Login OK');
-        showScreen('dashboard');
-
-        loadDashboard();
-    });
+    }
 
     // ================= CADASTRO =================
-    document.getElementById('register-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    const registerForm = document.getElementById('register-form');
 
-        const email = document.getElementById('reg-email').value;
-        const password = document.getElementById('reg-password').value;
-        const username = document.getElementById('reg-username').value;
+    if (registerForm) {
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        const data = await api('/auth/register', 'POST', {
-            email,
-            password,
-            username
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            const username = document.getElementById('reg-username').value;
+
+           const data = await api('/auth/cadastro', 'POST', {
+    email,
+    password,
+    nome_usuario: username
+});
+
+            if (data.error) return showToast(data.error);
+
+            showToast('Conta criada!');
+            showScreen('login');
+
+            registerForm.reset();
         });
-
-        if (data.error) {
-            showToast(data.error);
-            return;
-        }
-
-        showToast('Conta criada!');
-        showScreen('login');
-    });
+    }
 
     // ================= DASHBOARD =================
     async function loadDashboard() {
+        if (!currentUser) return;
 
         const profile = await api('/perfil', 'POST', {
             userId: currentUser.id
         });
 
         document.getElementById('user-points-display').innerHTML =
-            `${profile.pontos} pontos`;
+            `${profile.pontos || 0} pontos`;
 
         document.getElementById('username-display').textContent =
-            profile.nome_usuario;
+            profile.nome_usuario || '';
 
         loadMatches();
         loadRanking();
@@ -315,12 +355,12 @@
 
     // ================= JOGOS =================
     async function loadMatches() {
-
         const jogos = await api('/jogos');
 
         const container = document.getElementById('matches-container');
+        if (!container) return;
 
-        container.innerHTML = jogos.map(j => `
+        container.innerHTML = (jogos || []).map(j => `
             <div class="bg-[#16213e] p-4 rounded-xl text-white">
                 <div>${j.time_casa} vs ${j.time_fora}</div>
 
@@ -335,39 +375,42 @@
     // ================= MODAL =================
     window.openModal = (id, casa, fora) => {
         currentMatchId = id;
-        document.getElementById('prediction-modal').classList.remove('hidden');
+        document.getElementById('prediction-modal')?.classList.remove('hidden');
     };
 
-    document.getElementById('prediction-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    const predictionForm = document.getElementById('prediction-form');
 
-        const casa = document.getElementById('home-score-input').value;
-        const fora = document.getElementById('away-score-input').value;
+    if (predictionForm) {
+        predictionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        const res = await api('/palpites', 'POST', {
-            userId: currentUser.id,
-            jogoId: currentMatchId,
-            placar_casa: casa,
-            placar_fora: fora
+            const casa = document.getElementById('home-score-input').value;
+            const fora = document.getElementById('away-score-input').value;
+
+            const res = await api('/palpites', 'POST', {
+                userId: currentUser.id,
+                jogoId: currentMatchId,
+                placar_casa: casa,
+                placar_fora: fora
+            });
+
+            if (res.error) return showToast(res.error);
+
+            showToast('Palpite enviado!');
+            document.getElementById('prediction-modal')?.classList.add('hidden');
+
+            predictionForm.reset();
         });
-
-        if (res.error) {
-            showToast(res.error);
-            return;
-        }
-
-        showToast('Palpite enviado!');
-        document.getElementById('prediction-modal').classList.add('hidden');
-    });
+    }
 
     // ================= RANKING =================
     async function loadRanking() {
-
         const ranking = await api('/ranking');
 
         const container = document.getElementById('ranking-container');
+        if (!container) return;
 
-        container.innerHTML = ranking.map((u, i) => `
+        container.innerHTML = (ranking || []).map((u, i) => `
             <div class="flex justify-between text-white p-2">
                 <span>${i + 1}. ${u.nome_usuario}</span>
                 <span>${u.pontos}</span>
@@ -377,6 +420,7 @@
 
     // ================= INIT =================
     showScreen('login');
+
 });
 </script>
 </body>
